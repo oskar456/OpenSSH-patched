@@ -200,7 +200,7 @@ verify_host_key_dns(const char *hostname, struct sockaddr *address,
 
 	u_int8_t hostkey_algorithm;
 	u_int8_t hostkey_digest_type = SSHFP_HASH_RESERVED;
-	u_char *hostkey_digest;
+	u_char *hostkey_digest = NULL;
 	u_int hostkey_digest_len;
 
 	u_int8_t dnskey_algorithm;
@@ -240,14 +240,6 @@ verify_host_key_dns(const char *hostname, struct sockaddr *address,
 		    fingerprints->rri_nrdatas);
 	}
 
-	/* Initialize default host key parameters */
-	if (!dns_read_key(&hostkey_algorithm, &hostkey_digest_type,
-	    &hostkey_digest, &hostkey_digest_len, hostkey)) {
-		error("Error calculating host key fingerprint.");
-		freerrset(fingerprints);
-		return -1;
-	}
-
 	if (fingerprints->rri_nrdatas)
 		*flags |= DNS_VERIFY_FOUND;
 
@@ -269,15 +261,15 @@ verify_host_key_dns(const char *hostname, struct sockaddr *address,
 
 		if (hostkey_digest_type != dnskey_digest_type) {
 			hostkey_digest_type = dnskey_digest_type;
-			xfree(hostkey_digest);
+			if (hostkey_digest)
+				xfree(hostkey_digest); /* from key_fingerprint_raw() */
 
 			/* Initialize host key parameters */
 			if (!dns_read_key(&hostkey_algorithm,
 			    &hostkey_digest_type, &hostkey_digest,
 			    &hostkey_digest_len, hostkey)) {
-				error("Error calculating key fingerprint.");
-				freerrset(fingerprints);
-				return -1;
+				debug("Error calculating key fingerprint.");
+				continue;
 			}
 		}
 
@@ -292,7 +284,8 @@ verify_host_key_dns(const char *hostname, struct sockaddr *address,
 		xfree(dnskey_digest);
 	}
 
-	xfree(hostkey_digest); /* from key_fingerprint_raw() */
+	if (hostkey_digest)
+		xfree(hostkey_digest); /* from key_fingerprint_raw() */
 	freerrset(fingerprints);
 
 	if (*flags & DNS_VERIFY_FOUND) {
