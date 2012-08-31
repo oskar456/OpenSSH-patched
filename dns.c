@@ -208,6 +208,11 @@ verify_host_key_dns(const char *hostname, struct sockaddr *address,
 	u_char *dnskey_digest;
 	u_int dnskey_digest_len;
 
+	u_int found_cnt[256];
+	u_int match_cnt[256];
+	memset(&found_cnt, 0, sizeof(found_cnt));
+	memset(&match_cnt, 0, sizeof(match_cnt));
+
 	*flags = 0;
 
 	debug3("verify_host_key_dns");
@@ -259,6 +264,9 @@ verify_host_key_dns(const char *hostname, struct sockaddr *address,
 			continue;
 		}
 
+		if (hostkey_algorithm == dnskey_algorithm)
+			found_cnt[dnskey_digest_type]++;
+
 		if (hostkey_digest_type != dnskey_digest_type) {
 			hostkey_digest_type = dnskey_digest_type;
 			xfree(hostkey_digest);
@@ -279,7 +287,7 @@ verify_host_key_dns(const char *hostname, struct sockaddr *address,
 			if (hostkey_digest_len == dnskey_digest_len &&
 			    timingsafe_bcmp(hostkey_digest, dnskey_digest,
 			    hostkey_digest_len) == 0)
-				*flags |= DNS_VERIFY_MATCH;
+				match_cnt[dnskey_digest_type]++;
 		}
 		xfree(dnskey_digest);
 	}
@@ -287,12 +295,24 @@ verify_host_key_dns(const char *hostname, struct sockaddr *address,
 	xfree(hostkey_digest); /* from key_fingerprint_raw() */
 	freerrset(fingerprints);
 
-	if (*flags & DNS_VERIFY_FOUND)
-		if (*flags & DNS_VERIFY_MATCH)
-			debug("matching host key fingerprint found in DNS");
+	if (*flags & DNS_VERIFY_FOUND) {
+		debug("found %d SHA1 fingerprints and %d SHA256 fingerprints",
+			found_cnt[SSHFP_HASH_SHA1], found_cnt[SSHFP_HASH_SHA256]);
+		debug("matched %d SHA1 fingerprints and %d SHA256 fingerprints",
+			match_cnt[SSHFP_HASH_SHA1], match_cnt[SSHFP_HASH_SHA256]);
+		if (found_cnt[SSHFP_HASH_SHA256] > 0)
+			if (match_cnt[SSHFP_HASH_SHA256] > 0) {
+				debug("matching SHA256 host key fingerprint found in DNS");
+				*flags |= DNS_VERIFY_MATCH;
+			} else
+				debug("no matching SHA256 host key fingerprint found in DNS");
 		else
-			debug("mismatching host key fingerprint found in DNS");
-	else
+			if (match_cnt[SSHFP_HASH_SHA1] > 0 && hostkey_algorithm < SSHFP_KEY_ECDSA ) {
+				debug("matching SHA1 host key fingerprint found in DNS");
+				*flags |= DNS_VERIFY_MATCH;
+			} else
+				debug("no matching SHA1 host key fingerprint found in DNS");
+	} else
 		debug("no host key fingerprint found in DNS");
 
 	return 0;
