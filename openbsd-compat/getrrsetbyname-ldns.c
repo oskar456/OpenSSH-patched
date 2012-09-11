@@ -60,6 +60,13 @@
 #define calloc(x, y)	(xcalloc((x),(y)))
 #define free(x)		(xfree(x))
 
+static const char trust_anchor[] = ".       172800  IN      DNSKEY  257 3 8 "
+     "AwEAAagAIKlVZrpC6Ia7gEzahOR+9W29euxhJhVVLOyQbSEW0O8gcCjFFVQUTf6v58fLjw"
+     "Bd0YI0EzrAcQqBGCzh/RStIoO8g0NfnfL2MTJRkxoXbfDaUeVPQuYEhg37NZWAJQ9VnMVD"
+     "xP/VHL496M/QZxkjf5/Efucp2gaDX6RS6CXpoY68LsvPVjR0ZSwzz1apAzvN9dlzEheX7I"
+     "CJBBtuA6G3LQpzW5hOA2hzCTMjJPJ8LbqF6dsV6DoBQzgul0sGIcGOYl7OyQdXfZ57relS"
+     "Qageu+ipAdTTJ25AsRTAoub8ONGcLmqrAmRLKBP1dfwhYB4N7knNnulqQxA+Uk1ihz0=";
+
 int
 getrrsetbyname(const char *hostname, unsigned int rdclass,
 	       unsigned int rdtype, unsigned int flags,
@@ -160,9 +167,24 @@ getrrsetbyname(const char *hostname, unsigned int rdclass,
 	debug2("ldns: got %u signature(s) (RRTYPE %u) from DNS",
 	       rrset->rri_nsigs, LDNS_RR_TYPE_RRSIG);
 
+	if ((err = ldns_rr_new_frm_str(&rr, trust_anchor, 0, NULL, NULL))
+	     == LDNS_STATUS_OK) {
+		if ((err = ldns_resolver_push_dnssec_anchor(ldns_res, rr))
+		     == LDNS_STATUS_OK) {
+			ldns_rr_free(rr);
+		} else {
+			debug2("ldns: Trust anchor push failed: %s",
+			    ldns_get_errorstr_by_id(err));
+		}
+	} else {
+		debug2("ldns: Trust anchor read failed: %s",
+		    ldns_get_errorstr_by_id(err));
+	}
+
+
 	if ((err = ldns_verify_trusted(ldns_res, rrdata, rrsigs,
 	     trusted_keys)) == LDNS_STATUS_OK) {
-		rrset->rri_flags |= RRSET_VALIDATED;
+	     rrset->rri_flags |= RRSET_VALIDATED;
 		debug2("ldns: RRset is signed with a valid key");
 	} else {
 		debug2("ldns: RRset validation failed: %s",
