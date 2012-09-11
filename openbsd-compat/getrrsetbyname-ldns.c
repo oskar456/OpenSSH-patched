@@ -148,31 +148,28 @@ getrrsetbyname(const char *hostname, unsigned int rdclass,
 	debug2("ldns: got %u answers from DNS", rrset->rri_nrdatas);
 
 	/* Check for authenticated data */
-	if (ldns_pkt_ad(pkt)) {
+	/* try autonomous validation, regardless of AD flag */
+	ldns_rr_list * trusted_keys = ldns_rr_list_new();
+
+	debug2("ldns: trying to validate RRset");
+	/* Get eventual sigs */
+	rrsigs = ldns_pkt_rr_list_by_type(pkt, LDNS_RR_TYPE_RRSIG,
+	    LDNS_SECTION_ANSWER);
+
+	rrset->rri_nsigs = ldns_rr_list_rr_count(rrsigs);
+	debug2("ldns: got %u signature(s) (RRTYPE %u) from DNS",
+	       rrset->rri_nsigs, LDNS_RR_TYPE_RRSIG);
+
+	if ((err = ldns_verify_trusted(ldns_res, rrdata, rrsigs,
+	     trusted_keys)) == LDNS_STATUS_OK) {
 		rrset->rri_flags |= RRSET_VALIDATED;
-	} else { /* AD is not set, try autonomous validation */
-		ldns_rr_list * trusted_keys = ldns_rr_list_new();
-
-		debug2("ldns: trying to validate RRset");
-		/* Get eventual sigs */
-		rrsigs = ldns_pkt_rr_list_by_type(pkt, LDNS_RR_TYPE_RRSIG,
-		    LDNS_SECTION_ANSWER);
-
-		rrset->rri_nsigs = ldns_rr_list_rr_count(rrsigs);
-		debug2("ldns: got %u signature(s) (RRTYPE %u) from DNS",
-		       rrset->rri_nsigs, LDNS_RR_TYPE_RRSIG);
-
-		if ((err = ldns_verify_trusted(ldns_res, rrdata, rrsigs,
-		     trusted_keys)) == LDNS_STATUS_OK) {
-			rrset->rri_flags |= RRSET_VALIDATED;
-			debug2("ldns: RRset is signed with a valid key");
-		} else {
-			debug2("ldns: RRset validation failed: %s",
-			    ldns_get_errorstr_by_id(err));
-		}
-
-		ldns_rr_list_deep_free(trusted_keys);
+		debug2("ldns: RRset is signed with a valid key");
+	} else {
+		debug2("ldns: RRset validation failed: %s",
+		    ldns_get_errorstr_by_id(err));
 	}
+
+	ldns_rr_list_deep_free(trusted_keys);
 
 	/* allocate memory for answers */
 	rrset->rri_rdatas = calloc(rrset->rri_nrdatas,
