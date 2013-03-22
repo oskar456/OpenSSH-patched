@@ -184,7 +184,7 @@ getrrsetbyname(const char *hostname, unsigned int rdclass,
 
 	if ((err = ldns_verify_trusted(ldns_res, rrdata, rrsigs,
 	     trusted_keys)) == LDNS_STATUS_OK) {
-	     rrset->rri_flags |= RRSET_VALIDATED;
+		rrset->rri_flags |= RRSET_VALIDATED;
 		debug2("ldns: RRset is signed with a valid key");
 	} else {
 		debug2("ldns: RRset validation failed: %s",

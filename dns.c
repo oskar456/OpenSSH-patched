@@ -256,9 +256,6 @@ verify_host_key_dns(const char *hostname, struct sockaddr *address,
 			continue;
 		}
 
-		if (hostkey_algorithm == dnskey_algorithm)
-			found_cnt[dnskey_digest_type]++;
-
 		if (hostkey_digest_type != dnskey_digest_type) {
 			hostkey_digest_type = dnskey_digest_type;
 			if (hostkey_digest)
@@ -272,6 +269,9 @@ verify_host_key_dns(const char *hostname, struct sockaddr *address,
 				continue;
 			}
 		}
+
+		if (hostkey_algorithm == dnskey_algorithm)
+			found_cnt[dnskey_digest_type]++;
 
 		/* Check if the current key is the same as the given key */
 		if (hostkey_algorithm == dnskey_algorithm &&
